@@ -5,8 +5,12 @@ var keys = require('./keys.js'),
     accounts = 'https://accounts.spotify.com',
     passport = require('passport'),
     SpotifyStrategy = require('passport-spotify').Strategy,
-    btoa = require('btoa');
+    btoa = require('btoa'),
+    User =require('./models/users'),
+    mongoose = require('mongoose');
 
+    app.use(passport.initialize());
+    app.use(passport.session());
 
 passport.use(new SpotifyStrategy({
     clientID: keys.client_id,
@@ -14,7 +18,15 @@ passport.use(new SpotifyStrategy({
     callbackURL: keys.callback_uri
   },
   function(accessToken, refreshToken, profile, done) {
-    User.findOrCreate({ spotifyId: profile.id }, function (err, user) {
+    console.log('profile', profile)
+    // User.find({ spotifyId: profile.id }).exec(function() {
+      User.create({spotifyId: profile.id, username: profile.username}, function (err, user) {
+        passport.serializeUser(function(user, done) {
+          done(null, user);
+        });
+        passport.deserializeUser(function(user, done) {
+          done(null, user);
+        });
       return done(err, user);
     });
   }
@@ -22,32 +34,16 @@ passport.use(new SpotifyStrategy({
 
 module.exports = function (app) {
 
-  app.get('/authorize', function (req, res) {
-    var queryString = '?client_id='+keys.client_id+'&response_type=code&redirect_uri='+keys.callback_uri;
+  app.get('/authorize', passport.authenticate('spotify'), function (req, res) {
+    // var queryString = '?client_id='+keys.client_id+'&response_type=code&redirect_uri='+keys.callback_uri;
 
-    res.redirect(accounts+'/authorize/'+queryString);
+    // res.redirect(accounts+'/authorize/'+queryString);
 
   });
 
-  app.get('/authorize/callback/', function (req, res) {
-    var code = res.req.query.code;
-    request({
-      method: 'POST',
-      url: accounts + '/api/token',
-      data: {
-        body: {
-          grant_type: 'authorization_code',
-          code: code,
-          redirect_uri: keys.callback2
-        }
-      },
-      headers: {
-        Authorization: 'Basic ' + btoa(keys.client_id+':'+keys.client_secret)
-      }
-    }, function (err, resp, body) {
-      console.log('body', resp.body)
-    });
-    res.sendStatus(200);
+  app.get('/authorize/callback/', passport.authenticate('spotify', {failureRedirect: '/login'}),
+    function (req, res) {
+    res.redirect('/');
   });
 
 
